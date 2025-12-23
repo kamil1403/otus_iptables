@@ -1,0 +1,139 @@
+---
+- name: Common setup
+  hosts: all
+  become: true
+  tasks:
+    - name: Fix CentOS 7 EOL repositories (step 1)
+      shell: sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+      ignore_errors: yes
+
+    - name: Fix CentOS 7 EOL repositories (step 2)
+      shell: sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+      ignore_errors: yes
+
+    - name: Install iptables-services and tools
+      yum:
+        name:
+          - iptables-services
+          - net-tools
+          - nmap
+          - epel-release
+        state: present
+
+    - name: Install nginx (for server)
+      yum:
+        name: nginx
+        state: present
+      when: inventory_hostname == 'centralServer'
+
+    - name: Start Nginx
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+      when: inventory_hostname == 'centralServer'
+
+    - name: Stop firewalld
+      service:
+        name: firewalld
+        state: stopped
+        enabled: no
+
+    - name: Enable iptables service
+      service:
+        name: iptables
+        state: started
+        enabled: yes
+
+    - name: Allow HTTP on centralServer
+      shell: iptables -I INPUT -p tcp --dport 80 -j ACCEPT && service iptables save
+      when: inventory_hostname == 'centralServer'
+
+# Port Knocking на inetRouter
+- name: Configure Port Knocking on inetRouter
+  hosts: inetRouter
+  become: true
+  tasks:
+    - name: Apply Knocking Rules
+      shell: |
+        iptables -F
+        iptables -X
+        iptables -t nat -F
+        iptables -t nat -X
+
+        iptables -P INPUT DROP
+        iptables -P FORWARD ACCEPT
+        iptables -P OUTPUT ACCEPT
+
+        iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+        iptables -A INPUT -i lo -j ACCEPT
+        
+        iptables -A INPUT -i eth0 -p tcp --dport 22 -j ACCEPT
+        
+        iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+        iptables -A INPUT -p tcp --dport 22 -m recent --rcheck --seconds 30 --name PASSED -j ACCEPT
+        iptables -A INPUT -p tcp --dport 7777 -m recent --set --name STAGE1 -j DROP
+        iptables -A INPUT -p tcp --dport 8888 -m recent --rcheck --name STAGE1 -m recent --set --name STAGE2 -j DROP
+        iptables -A INPUT -p tcp --dport 9999 -m recent --rcheck --name STAGE2 -m recent --set --name PASSED -j LOG --log-prefix "KNOCK_SUCCESS: "
+
+        service iptables save
+      args:
+        executable: /bin/bash
+
+# Скрипт для стука на centralRouter
+- name: Create knock script on centralRouter
+  hosts: centralRouter
+  become: true
+  tasks:
+    - name: Create knock script
+      copy:
+        dest: /home/vagrant/knock.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          HOST=$1
+          echo "Knocking on $HOST..."
+          nmap -Pn --host-timeout 100 --max-retries 0 -p 7777 $HOST > /dev/null 2>&1
+          nmap -Pn --host-timeout 100 --max-retries 0 -p 8888 $HOST > /dev/null 2>&1
+          nmap -Pn --host-timeout 100 --max-retries 0 -p 9999 $HOST > /dev/null 2>&1
+          echo "Knock sequence done. Try SSH now."
+
+# Проброс портов на inetRouter2-
+- name: Configure Port Forwarding on inetRouter2
+  hosts: inetRouter2
+  become: true
+  tasks:
+    - name: Disable SELinux
+      shell: setenforce 0
+      ignore_errors: yes
+
+    - name: Disable rp_filter
+      sysctl:
+        name: "{{ item }}"
+        value: '0'
+        sysctl_set: yes
+        state: present
+        reload: yes
+      loop:
+        - net.ipv4.conf.all.rp_filter
+        - net.ipv4.conf.eth0.rp_filter
+        - net.ipv4.conf.eth1.rp_filter
+        - net.ipv4.conf.eth2.rp_filter
+
+    - name: Apply NAT Rules
+      shell: |
+        iptables -F
+        iptables -t nat -F
+        sysctl -w net.ipv4.ip_forward=1
+
+        iptables -t nat -A PREROUTING -p tcp --dport 8080 -j DNAT --to-destination 192.168.255.3:80
+
+        iptables -t nat -A POSTROUTING -p tcp -d 192.168.255.3 --dport 80 -j SNAT --to-source 192.168.255.4
+        
+        iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+        iptables -P FORWARD ACCEPT
+        service iptables save
+      args:
+        executable: /bin/bash
