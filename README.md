@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Icon-firewall.svg/200px-Icon-firewall.svg.png" alt="Firewall Logo" width="150">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/a/af/Tux.png" alt="Linux" width="120">
 </p>
 
 ## ![Lesson](https://img.shields.io/badge/Lesson-iptables-00758F?style=for-the-badge&logo=linux&logoColor=white&labelColor=111827)![Author](https://img.shields.io/badge/Author-Kamil%20Ibragimov-10B981?style=for-the-badge&logo=github&logoColor=white&labelColor=111827)![Date](https://img.shields.io/badge/Date-23.12.2025-F59E0B?style=for-the-badge&logo=calendar&logoColor=white&labelColor=111827)
