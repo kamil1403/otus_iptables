@@ -15,7 +15,7 @@
 - [x] NAT работает.
 
 **1. Проверка NAT (Port Forwarding):**
-Результат см. на скриншоте 🖼️ ["1.png"](https://github.com/kamil1403/otus_iptables/blob/main/otus_iptables_1.png)
+Результат см. на скриншоте 🖼️ ["1.png"](https://github.com/kamil1403/otus_iptables/blob/main/otus_iptables_1.png)   
 **2. Проверка Port Knocking:**
 Результат см. на скриншоте 🖼️ ["2.png"](https://github.com/kamil1403/otus_iptables/blob/main/otus_iptables_2.png)
 
